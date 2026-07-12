@@ -11,14 +11,21 @@ on:
 jobs:
   release:
     runs-on: cx-public-ubuntu-x64
+    permissions:
+      contents: write
     outputs:
       CLI_VERSION: ${{ steps.extract_cli_version.outputs.CLI_VERSION }}
-    
+
     steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@9af89fc71515a100421586dfdb3dc9c984fbf411 #v2.19.4
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
       - name: Checkout
         uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          persist-credentials: false
 
       - name: Extract full CLI version from Dockerfile
         id: extract_cli_version
@@ -44,19 +51,20 @@ jobs:
           git push origin "${tag}"
 
       - name: Create Release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 #v1
+        uses: step-security/action-gh-release@277bfa82abcfdb73e5bbb19e213fd76532ee2be5 # v3.0.0
         with:
           tag_name: ${{ github.event.inputs.tag }}
           generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  notify:
-    needs: release
-    uses: Checkmarx/plugins-release-workflow/.github/workflows/release-notify.yml@main
-    with:
-      product_name: Github Action
-      release_version: ${{ github.event.inputs.tag }}
-      cli_release_version: ${{ needs.release.outputs.CLI_VERSION }}
-      release_author: "Phoenix Team"
-      release_url: https://github.com/Checkmarx/ast-github-action/releases/tag/${{ github.event.inputs.tag }}
-      jira_product_name: GITHUB_ACTION
-    secrets: inherit
+  # notify:
+  #   needs: release
+  #   uses: Checkmarx/plugins-release-workflow/.github/workflows/release-notify.yml@main
+  #   with:
+  #     product_name: Github Action
+  #     release_version: ${{ github.event.inputs.tag }}
+  #     cli_release_version: ${{ needs.release.outputs.CLI_VERSION }}
+  #     release_author: "Phoenix Team"
+  #     release_url: https://github.com/Checkmarx/ast-github-action/releases/tag/${{ github.event.inputs.tag }}
+  #     jira_product_name: GITHUB_ACTION
+  #   secrets: inherit
