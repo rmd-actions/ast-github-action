@@ -10,29 +10,38 @@ on:
   repository_dispatch:
     types: [cli-version-update]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   update-base-image:
+    name: Update Base Image
     runs-on: cx-public-ubuntu-x64
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write  # for git commit and push of Dockerfile changes
+      pull-requests: write  # for step-security/create-pull-request to open a PR
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Get Version and SHA256 Manifest Digest
         id: checkmarx-ast-cli
+        env:
+          CLI_VERSION_INPUT: ${{ github.event.inputs.cli_version }}
         run: |
           REPO="checkmarx/ast-cli"
           TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${REPO}:pull" | jq -r .token)
 
           # Fetch the latest version if not provided
-          if [[ -n "${{ github.event.inputs.cli_version }}" ]]; then
-            RELEASE_TAG="${{ github.event.inputs.cli_version }}"
+          if [[ -n "${CLI_VERSION_INPUT}" ]]; then
+            RELEASE_TAG="${CLI_VERSION_INPUT}"
           else
             RELEASE_TAG=$(curl -s -H "Authorization: Bearer $TOKEN" "https://registry.hub.docker.com/v2/${REPO}/tags/list" | \
               jq -r '.tags | map(select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))) | sort_by(split(".") | map(tonumber)) | .[-1]')

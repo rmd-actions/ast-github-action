@@ -2,14 +2,23 @@ name: Checkmarx One Github Action CI
 
 on: [ pull_request ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   integration-tests:
     runs-on: cx-public-ubuntu-x64
 
     name: Integration Testing
     steps:
-      - name: Checkout the repository
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Create source file
         run: |
@@ -22,14 +31,16 @@ jobs:
         uses: ./
         with:
           project_name: ${{ github.event.repository.name }}-tests
-          base_uri: https://fake.com
+          base_uri: ${{ secrets.CX_BASE_URI }}
           cx_client_id: ""
           cx_client_secret: ""
       - name: Check If Authentication Failed
         if: ${{contains( steps.empty_client_secret.outcome, 'success')}}
+        env:
+          STEP_OUTCOME: ${{ steps.empty_client_secret.outcome }}
         run: |
           echo "The authentication must fail if invalid client id or password is used"
-          echo "${{ steps.empty_client_secret.outcome}}"
+          echo "${STEP_OUTCOME}"
           exit 1
       
       # Test valid input
@@ -46,9 +57,11 @@ jobs:
           additional_params: --file-include *.sh,Dockerfile --scan-types kics --report-format summaryJSON
       - name: Check If Scan Failed
         if: ${{ contains( steps.valid_scenario.outcome, 'success') == false}}
+        env:
+          STEP_OUTCOME: ${{ steps.valid_scenario.outcome }}
         run: |
           echo "The action outcome should be success."
-          echo "${{ steps.valid_scenario.outcome}}"
+          echo "${STEP_OUTCOME}"
           exit 1
       - name: Check If Output Scan ID Is Empty
         if: steps.valid_scenario.outputs.cxScanID == ''
@@ -56,16 +69,20 @@ jobs:
           echo "Scan ID empty."
           exit 1
       - name: Print Output Scan ID
+        env:
+          SCAN_ID: ${{ steps.valid_scenario.outputs.cxScanID }}
         run: |
-          echo "${{ steps.valid_scenario.outputs.cxScanID }}"
+          echo "${SCAN_ID}"
       - name: Check If Output Log Is Empty
         if: steps.valid_scenario.outputs.cxcli == ''
         run: |
           echo "Output log empty."
           exit 1
-      - name: Print CLI Output 
+      - name: Print CLI Output
+        env:
+          CLI_OUTPUT: ${{ steps.valid_scenario.outputs.cxcli }}
         run: |
-          echo "${{ steps.valid_scenario.outputs.cxcli }}"
+          echo "${CLI_OUTPUT}"
       
       # Test failure when wrong preset name
       - name: Test With Wrong Preset Name
@@ -81,9 +98,11 @@ jobs:
           additional_params: --sast-preset-name ChekmarxDefaultFake --scan-types sast
       - name: Check If Preset Name Scan Completed
         if: ${{contains( steps.preset_name_test.outcome, 'success')}}
+        env:
+          STEP_OUTCOME: ${{ steps.preset_name_test.outcome }}
         run: |
           echo "The cli should fail. Wrong preset name provided"
-          echo "${{ steps.preset_name_test.outcome}}"
+          echo "${STEP_OUTCOME}"
           exit 1
 
       # Test source path input
@@ -108,9 +127,11 @@ jobs:
       
       - name: Check If Scan Failed
         if: ${{ contains( steps.valid_scenario_source_path.outcome, 'success') == false}}
+        env:
+          STEP_OUTCOME: ${{ steps.valid_scenario_source_path.outcome }}
         run: |
           echo "The action outcome should be success."
-          echo "${{ steps.valid_scenario_source_path.outcome}}"
+          echo "${STEP_OUTCOME}"
           exit 1
 
       - name: Check If Output Scan ID Is empty
@@ -120,8 +141,10 @@ jobs:
           exit 1
 
       - name: Print Output Scan ID
+        env:
+          SCAN_ID: ${{ steps.valid_scenario_source_path.outputs.cxScanID }}
         run: |
-          echo "${{ steps.valid_scenario_source_path.outputs.cxScanID }}"
+          echo "${SCAN_ID}"
 
       - name: Check If Output Log Is Empty
         if: steps.valid_scenario_source_path.outputs.cxcli == ''
@@ -129,6 +152,8 @@ jobs:
           echo "Output log empty."
           exit 1
 
-      - name: Print cCLI Output 
+      - name: Print cCLI Output
+        env:
+          CLI_OUTPUT: ${{ steps.valid_scenario_source_path.outputs.cxcli }}
         run: |
-          echo "${{ steps.valid_scenario_source_path.outputs.cxcli }}"
+          echo "${CLI_OUTPUT}"
